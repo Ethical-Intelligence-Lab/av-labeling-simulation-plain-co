@@ -2,7 +2,7 @@
   "name": "av_labeling_simulation_copilot",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://Ethical-Intelligence-Lab.github.io/av_labeling_simulation_copilot",
+  "homepage": "https://Ethical-Intelligence-Lab.github.io/av-labeling-simulation-plain-co",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

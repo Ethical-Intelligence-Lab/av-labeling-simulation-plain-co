@@ -25,7 +25,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build --r https://github.com/Ethical-Intelligence-Lab/av-labeling-simulation-plain-co"
   },
   "eslintConfig": {
     "extends": [

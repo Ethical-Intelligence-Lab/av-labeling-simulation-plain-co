@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/av-labeling-simulation-plain-co/static/css/main.e6c13ad2.css",
-    "main.js": "/av-labeling-simulation-plain-co/static/js/main.04272bcb.js",
+    "main.js": "/av-labeling-simulation-plain-co/static/js/main.cee74b09.js",
     "index.html": "/av-labeling-simulation-plain-co/index.html",
     "main.e6c13ad2.css.map": "/av-labeling-simulation-plain-co/static/css/main.e6c13ad2.css.map",
-    "main.04272bcb.js.map": "/av-labeling-simulation-plain-co/static/js/main.04272bcb.js.map"
+    "main.cee74b09.js.map": "/av-labeling-simulation-plain-co/static/js/main.cee74b09.js.map"
   },
   "entrypoints": [
     "static/css/main.e6c13ad2.css",
-    "static/js/main.04272bcb.js"
+    "static/js/main.cee74b09.js"
   ]
 }

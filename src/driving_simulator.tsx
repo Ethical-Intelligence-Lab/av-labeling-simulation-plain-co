@@ -51,6 +51,8 @@ interface CollisionEvent {
 
 const DrivingSimulator = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
   const [isAutopilot, setIsAutopilot] = useState(true); // Always in Copilot mode
   const [autopilotPending, setAutopilotPending] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -145,6 +147,28 @@ const DrivingSimulator = () => {
   useEffect(() => {
     isCompleteRef.current = isComplete;
   }, [isComplete]);
+
+  // Scale calculation for uniform aspect ratio
+  useEffect(() => {
+    const calculateScale = () => {
+      if (!wrapperRef.current) return;
+      const wrapper = wrapperRef.current;
+      const availableWidth = wrapper.clientWidth;
+      const availableHeight = wrapper.clientHeight;
+      
+      const baseWidth = 1280;
+      const baseHeight = 720;
+      
+      const scaleX = (availableWidth * 0.98) / baseWidth;
+      const scaleY = (availableHeight * 0.98) / baseHeight;
+      const newScale = Math.min(scaleX, scaleY);
+      
+      setScale(newScale);
+    };
+    calculateScale();
+    window.addEventListener('resize', calculateScale);
+    return () => window.removeEventListener('resize', calculateScale);
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -626,8 +650,8 @@ const DrivingSimulator = () => {
 
           allObstacles.forEach(obstacle => {
             const relativeZ = obstacle.position.z - carGroup.position.z;
-            // More conservative: detect obstacles from further away
-            if (relativeZ < 60 && relativeZ > -800) {
+            // INCREASED: detect obstacles from much further away (60 → 200)
+            if (relativeZ < 200 && relativeZ > -1000) {
               const obstacleX = obstacle.position.x;
               const distance = Math.abs(relativeZ);
 
@@ -639,13 +663,13 @@ const DrivingSimulator = () => {
               for (let i = 0; i < 3; i++) {
                 const laneCenterX = lanes[i];
                 const distanceFromLaneCenter = Math.abs(obstacleX - laneCenterX);
-                // More conservative lane detection
-                if (distanceFromLaneCenter < 0.8) {
+                // INCREASED: wider lane detection (0.8 → 1.5)
+                if (distanceFromLaneCenter < 1.5) {
                   if (distance < laneInfo[i].nearestObstacle) {
                     laneInfo[i].nearestObstacle = distance;
                   }
-                  // Mark unsafe from further away for more conservative behavior
-                  if (distance < 400) {
+                  // INCREASED: mark unsafe from much further (400 → 800)
+                  if (distance < 800) {
                     laneInfo[i].safe = false;
                   }
                 }
@@ -656,32 +680,27 @@ const DrivingSimulator = () => {
           let bestLane = currentLaneIndex;
           let maxDistance = laneInfo[currentLaneIndex].nearestObstacle;
 
+          // Always pick lane with most clearance
           for (let i = 0; i < 3; i++) {
-            if (laneInfo[i].nearestObstacle > maxDistance + 35) {
+            if (laneInfo[i].nearestObstacle > maxDistance) {
               maxDistance = laneInfo[i].nearestObstacle;
               bestLane = i;
             }
           }
 
+          // Switch immediately if current lane unsafe
           if (!laneInfo[currentLaneIndex].safe) {
             for (let i = 0; i < 3; i++) {
-              if (laneInfo[i].safe && laneInfo[i].nearestObstacle > laneInfo[currentLaneIndex].nearestObstacle) {
+              if (laneInfo[i].safe) {
                 bestLane = i;
-                maxDistance = laneInfo[i].nearestObstacle;
+                break;
               }
             }
           }
 
-          for (let i = 0; i < 3; i++) {
-            if (laneInfo[i].nearestObstacle > laneInfo[bestLane].nearestObstacle) {
-              bestLane = i;
-            }
-          }
-
-          if (laneInfo[bestLane].nearestObstacle > 450 && bestLane !== 1 && laneInfo[1].nearestObstacle > 450) {
-            if (autopilotHit90Tick) {
-              bestLane = 1;
-            }
+          // Prefer center when all clear
+          if (laneInfo[1].nearestObstacle > 600) {
+            bestLane = 1;
           }
 
           autopilotDecision = {
@@ -727,7 +746,8 @@ const DrivingSimulator = () => {
       //   carVelocity = AUTOPILOT_SPEED_UNITS;
       // }
 
-      const laneChangeEase = autopilotRef.current ? 0.2 : 0.1;
+      // INCREASED: faster lane changes (0.2 → 0.35)
+      const laneChangeEase = autopilotRef.current ? 0.35 : 0.1;
       const laneChangeFactor = Math.min(laneChangeEase * 1.0, 1); // Fixed timestep: always 1.0
       carLaneOffset += (targetLane - carLaneOffset) * laneChangeFactor;
       carGroup.position.x = carLaneOffset;
@@ -766,9 +786,11 @@ const DrivingSimulator = () => {
         
         if (dx < 1.3 && dz < 2.5) {
           if (!collisionCooldown.has(index) || frameCount - collisionCooldown.get(index) > 60) {
-            scoreRef.current = Math.max(0, scoreRef.current - 10);
-            setScore(scoreRef.current);
+            // Score deduction removed for deterministic 550 final score
+            // scoreRef.current = Math.max(0, scoreRef.current - 10);
+            // setScore(scoreRef.current);
             
+            // Still track collision data for research
             const collisionUnit = Math.min(Math.floor(Math.abs(carGroup.position.z)), TRACK_LENGTH);
             const modeLabel = autopilotRef.current ? labelCondition.toLowerCase() : 'manual';
             simulationDataRef.current.collisionEvents.push({
@@ -778,8 +800,6 @@ const DrivingSimulator = () => {
               z: carGroup.position.z,
               type: 'traffic'
             });
-            
-            // No visual feedback - score flash removed
             
             collisionCooldown.set(index, frameCount);
           }
@@ -803,9 +823,11 @@ const DrivingSimulator = () => {
           const blockKey = `block_${i}`;
           if (dx < 1.8 && dz < 3) {
             if (!collisionCooldown.has(blockKey) || frameCount - collisionCooldown.get(blockKey) > 60) {
-              scoreRef.current = Math.max(0, scoreRef.current - 10);
-              setScore(scoreRef.current);
+              // Score deduction removed for deterministic 550 final score
+              // scoreRef.current = Math.max(0, scoreRef.current - 10);
+              // setScore(scoreRef.current);
               
+              // Still track collision data for research
               const collisionUnit = Math.min(Math.floor(Math.abs(carGroup.position.z)), TRACK_LENGTH);
               const modeLabel = autopilotRef.current ? labelCondition.toLowerCase() : 'manual';
               simulationDataRef.current.collisionEvents.push({
@@ -823,7 +845,6 @@ const DrivingSimulator = () => {
                 failureLaneHitsRef.current += 1;
                 simulationDataRef.current.failureLaneHits = failureLaneHitsRef.current;
               }
-              
               
               collisionCooldown.set(blockKey, frameCount);
             }
@@ -879,8 +900,30 @@ const DrivingSimulator = () => {
   }, []);
 
   return (
-    <div style={{ width: '100%', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    <div 
+      ref={wrapperRef}
+      style={{ 
+        width: '100%', 
+        height: '100vh',
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        background: '#000',
+        overflow: 'hidden'
+      }}
+    >
+      <div style={{
+        width: '1280px',
+        height: '720px',
+        position: 'relative',
+        overflow: 'hidden',
+        // Using zoom for better text rendering (falls back to scale for unsupported browsers)
+        zoom: scale,
+        transform: 'translateZ(0)', // GPU acceleration
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale'
+      } as React.CSSProperties}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       
       {countdown !== null && (
         <div style={{
@@ -976,7 +1019,8 @@ const DrivingSimulator = () => {
             display: 'flex',
             gap: '18px',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            zIndex: 100
           }}>
             <div style={{
               background: 'rgba(0, 0, 0, 0.65)',
@@ -994,7 +1038,7 @@ const DrivingSimulator = () => {
               color: isAutopilot ? '#debaff' : '#ffffff',
               padding: isAutopilot ? '16px 28px' : '12px 24px',
               borderRadius: '50px',
-              fontSize: isAutopilot ? '30px' : '22px',
+              fontSize: '30px',
               fontFamily: 'monospace',
               fontWeight: 'bold',
               border: isAutopilot ? '2px solid rgba(138, 43, 226, 0.6)' : '1px solid rgba(255,255,255,0.45)',
@@ -1067,25 +1111,26 @@ const DrivingSimulator = () => {
       {!isComplete && gameStarted && (
         <div style={{
           position: 'absolute',
-          bottom: '200px', // Moved up from 30px to position right under the car
+          bottom: '180px',
           left: '50%',
           transform: 'translateX(-50%)',
-          textAlign: 'center'
+          textAlign: 'center',
+          zIndex: 100
         }}>
           <div style={{
-            minWidth: '320px', // Increased from 220px
+            minWidth: '320px',
             textAlign: 'center',
             background: 'rgba(68, 255, 68, 0.25)',
             color: '#44ff44',
-            padding: '18px 36px', // Increased from 12px 24px
+            padding: '18px 36px',
             borderRadius: '999px',
             fontFamily: 'Arial, sans-serif',
             fontWeight: 'bold',
-            fontSize: '20px', // Added larger font size
+            fontSize: '20px',
             border: '2px solid rgba(68, 255, 68, 0.6)',
             boxShadow: '0 0 12px rgba(68, 255, 68, 0.4)',
             transition: 'all 0.3s ease',
-            letterSpacing: '1.2px' // Increased from 0.8px
+            letterSpacing: '1.2px'
           }}>
             🤖 {labelCondition.toUpperCase()} ACTIVE
           </div>
@@ -1096,29 +1141,37 @@ const DrivingSimulator = () => {
       {isComplete && (
         <div style={{
           position: 'absolute',
-          top: '50%',
+          top: '180px',
           left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(0, 0, 0, 0.9)',
+          transform: 'translateX(-50%)',
+          width: '750px',
+          bottom: '100px',
+          background: 'rgba(0, 0, 0, 0.95)',
+          borderRadius: '20px',
+          padding: '50px',
+          zIndex: 2000,
+          animation: 'slideIn 0.3s ease-out',
+          display: 'flex',
+          flexDirection: 'column' as const,
+          justifyContent: 'center',
+          alignItems: 'center',
           color: 'white',
-          padding: '40px 60px',
-          borderRadius: '15px',
-          fontSize: '32px',
           fontFamily: 'Arial, sans-serif',
-          textAlign: 'center',
+          textAlign: 'center' as const,
           fontWeight: 'bold'
         }}>
-          ✅ Simulation Complete! ✅
+          <div style={{ fontSize: '32px' }}>
+            ✅ Simulation Complete! ✅
+          </div>
           <div style={{ fontSize: '24px', marginTop: '20px' }}>
             Final Score: {score}
           </div>
           <div style={{ fontSize: '18px', marginTop: '15px', color: '#ffaa44' }}>
             Blocks Hit: {simulationDataRef.current.whiteBlocksHit}
           </div>
-          <div style={{ fontSize: '14px', marginTop: '10px', color: '#aaaaaa' }}>
-          </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

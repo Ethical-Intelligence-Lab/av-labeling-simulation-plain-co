@@ -917,9 +917,8 @@ const DrivingSimulator = () => {
         height: '720px',
         position: 'relative',
         overflow: 'hidden',
-        // Using zoom for better text rendering (falls back to scale for unsupported browsers)
-        zoom: scale,
-        transform: 'translateZ(0)', // GPU acceleration
+        transform: `scale(${scale}) translateZ(0)`, // GPU acceleration + scaling
+        transformOrigin: 'center center',
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale'
       } as React.CSSProperties}>
